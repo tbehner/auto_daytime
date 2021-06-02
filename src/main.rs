@@ -9,7 +9,7 @@ use serde_json;
 use chrono::prelude::*;
 use neovim_lib::{Neovim, NeovimApi, Session};
 use glob::glob;
-use std::fs::OpenOptions;
+use std::fs::{remove_file,OpenOptions, File};
 use std::io::prelude::*;
 use regex::Regex;
 
@@ -47,6 +47,7 @@ struct SunInfoResponse {
     status: String,
 }
 
+#[derive(Debug,PartialEq)]
 enum SunState {
     Up,
     Down
@@ -120,16 +121,35 @@ fn set_running_nvim_sessions(state: &SunState) -> Result<()>{
     Ok(())
 }
 
-fn set_static_nvim_config(state: &SunState) -> Result<()> {
-    // create ~/.daylight.vim with default content if it does not exist
+fn get_daylight_config() -> Result<PathBuf> {
     let daylight_config: String = shellexpand::tilde("~/.daylight.vim").into();
     let daylight_config_path = PathBuf::from(daylight_config);
 
     if !daylight_config_path.is_file() {
         println!("You really need a ~/.daylight.vim for this to work!");
-        return Ok(());
+        let mut daylight_config_file = OpenOptions::new().create(true).write(true).open(&daylight_config_path)?;
+        daylight_config_file.write_all("set bg=light\n".as_bytes());
     }
-    dbg!(&daylight_config_path);
+
+    Ok(daylight_config_path)
+}
+
+fn get_static_daylight() -> Result<SunState> {
+    let daylight_config = get_daylight_config()?;
+    let mut daylight_file = File::open(&daylight_config)?;
+    let mut daylight_content = String::new();
+    daylight_file.read_to_string(&mut daylight_content)?;
+
+    let up_pattern = Regex::new("dark")?;
+    if up_pattern.is_match(&daylight_content){
+        Ok(SunState::Down)
+    } else {
+        Ok(SunState::Up)
+    }
+}
+
+fn set_static_nvim_config(state: &SunState) -> Result<()> {
+    let daylight_config_path = get_daylight_config()?;
 
     let mut daylight_file = OpenOptions::new()
         .append(false)
@@ -137,7 +157,6 @@ fn set_static_nvim_config(state: &SunState) -> Result<()> {
         .write(true)
         .read(false)
         .open(&daylight_config_path)?;
-    dbg!(&daylight_file);
 
     match state {
         SunState::Up => daylight_file.write_all(b"set bg=light\n")?,
@@ -151,6 +170,7 @@ fn set_static_alacritty_config(state: &SunState) -> Result<()> {
     let alacritty_config: String = shellexpand::tilde("~/.config/alacritty/alacritty.yml").into();
     let alacritty_config_path = PathBuf::from(&alacritty_config);
 
+    let mut config = String::new();
     let mut alacritty_config_file = OpenOptions::new()
         .read(true)
         .append(false)
@@ -158,29 +178,40 @@ fn set_static_alacritty_config(state: &SunState) -> Result<()> {
         .create(false)
         .open(&alacritty_config_path)?;
 
-    let color_line = Regex::new(r"colors: \*(([_\w]+)light([_\w]+))")?;
-    let mut config = String::new();
     alacritty_config_file.read_to_string(&mut config)?;
+
+    let color_line = Regex::new(r"colors: \*(([_\w]+)(light|dark)([_\w]+))")?;
+
+    let state_string: String = match state {
+        SunState::Up => "light".into(),
+        SunState::Down => "dark".into(),
+    };
+
     let updated_config: Vec<String> = config.lines().map(|line|{
-        if color_line.is_match(line) {
-            line.replace(":", "...")
-        } else {
-            line.into()
+        match color_line.captures(line) {
+            Some(caps) => {
+                format!("colors: *{}{}{}", caps.get(2).unwrap().as_str(), &state_string, caps.get(4).unwrap().as_str())
+            },
+            None => line.into()
         }
     }).collect();
-    dbg!(updated_config);
+
+    remove_file(&alacritty_config_path)?;
+    let mut new_alacritty_config_file = File::create(&alacritty_config_path)?;
+    new_alacritty_config_file.write_all(format!("{}\n", updated_config.join("\n")).as_bytes())?;
 
     Ok(())
 }
 
 fn main() -> Result<()> {
 
-    // let state = get_local_sun_state()?;
-    let state = SunState::Up;
-    // set_running_nvim_sessions(&state)?;
-    // set_static_nvim_config(&state)?;
-    set_static_alacritty_config(&state)?;
+    let state = get_local_sun_state()?;
+    let set_state = get_static_daylight()?;
+    if state != set_state {
+        set_running_nvim_sessions(&state)?;
+        set_static_nvim_config(&state)?;
+        set_static_alacritty_config(&state)?;
+    }
 
-    // set the correct theme in the alacritty config
     Ok(())
 }
