@@ -1,5 +1,5 @@
 [package]
-name = "switch_background"
+name = "auto_daytime"
 version = "0.1.0"
 authors = ["Timm Behner <timm.behner@fkie.fraunhofer.de>"]
 edition = "2018"

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::arg_enum;
 use structopt::StructOpt;
 use shellexpand;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json;

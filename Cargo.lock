@@ -38,6 +38,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "auto_daytime"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "glob",
+ "neovim-lib",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "shellexpand",
+ "structopt",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -963,23 +980,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "switch_background"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "glob",
- "neovim-lib",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "shellexpand",
- "structopt",
 ]
 
 [[package]]
