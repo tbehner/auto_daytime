@@ -1,5 +1,6 @@
 use structopt;
 use std::path::PathBuf;
+use clap::arg_enum;
 use structopt::StructOpt;
 use shellexpand;
 use anyhow::Result;
@@ -47,12 +48,13 @@ struct SunInfoResponse {
     status: String,
 }
 
-#[derive(Debug,PartialEq)]
-enum SunState {
-    Up,
-    Down
+arg_enum! {
+    #[derive(Debug,PartialEq)]
+    enum SunState {
+        Up,
+        Down
+    }
 }
-
 
 
 /// A basic example
@@ -68,8 +70,8 @@ struct Opt {
     nvim_init: PathBuf,
 
     /// Force a light or dark mode
-    #[structopt(short, long)]
-    force: Option<String>,
+    #[structopt(short, long, possible_values = &SunState::variants(), case_insensitive = true)]
+    force: Option<SunState>,
 }
 
 fn get_local_dt(formatted_time: &str) -> Result<DateTime<Local>> {
@@ -169,6 +171,10 @@ fn set_static_nvim_config(state: &SunState) -> Result<()> {
 fn set_static_alacritty_config(state: &SunState) -> Result<()> {
     let alacritty_config: String = shellexpand::tilde("~/.config/alacritty/alacritty.yml").into();
     let alacritty_config_path = PathBuf::from(&alacritty_config);
+    
+    if ! alacritty_config_path.is_file()  {
+        return Err(anyhow!("Alacritty config missing."));
+    }
 
     let mut config = String::new();
     let mut alacritty_config_file = OpenOptions::new()
@@ -204,8 +210,13 @@ fn set_static_alacritty_config(state: &SunState) -> Result<()> {
 }
 
 fn main() -> Result<()> {
+    let opt = Opt::from_args();
 
-    let state = get_local_sun_state()?;
+    let state = match opt.force {
+        Some(s) => s,
+        None => get_local_sun_state()?,
+    };
+
     let set_state = get_static_daylight()?;
     if state != set_state {
         set_running_nvim_sessions(&state)?;
